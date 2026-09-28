@@ -7,6 +7,8 @@ from app.models.user import User
 from app.routers.auth import router as auth_router
 from app.models.document import Document
 from app.routers.documents import router as documents_router
+from app.routers.search import router as search_router
+from app.routers.ask import router as ask_router
 from app.models.document_chunk import DocumentChunk
 
 app = FastAPI(
@@ -19,6 +21,8 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(auth_router)
 app.include_router(documents_router)
+app.include_router(search_router)
+app.include_router(ask_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

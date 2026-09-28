@@ -1,23 +1,15 @@
 import hashlib
 from pathlib import Path
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    UploadFile,
-    File
-)
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database.database import get_db
 from app.models.document import Document
-from app.models.document_chunk import DocumentChunk
 from app.models.user import User
 from app.schemas.document import DocumentCreate, DocumentResponse
 from app.services.auth_dependency import get_current_user
-from app.services.document_extractor import extract_text
-from app.services.text_chunker import chunk_text
+from app.services.document_processor import process_document
 
 
 router = APIRouter(
@@ -26,10 +18,7 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/",
-    response_model=DocumentResponse
-)
+@router.post("/", response_model=DocumentResponse)
 def create_document(
     data: DocumentCreate,
     current_user: User = Depends(get_current_user),
@@ -40,7 +29,8 @@ def create_document(
         title=data.title,
         filename=data.filename,
         file_type=data.file_type,
-        file_path=data.file_path
+        file_path=data.file_path,
+        file_hash=""
     )
 
     db.add(new_document)
@@ -69,10 +59,7 @@ def upload_document(
         )
 
     original_filename = file.filename
-
-    file_extension = Path(
-        original_filename
-    ).suffix.lower()
+    file_extension = Path(original_filename).suffix.lower()
 
     if file_extension not in allowed_extensions:
         raise HTTPException(
@@ -82,24 +69,13 @@ def upload_document(
 
     file_contents = file.file.read()
 
-    file_hash = hashlib.sha256(
-        file_contents
-    ).hexdigest()
-
-    existing_document = (
-        db.query(Document)
-        .filter(
-            Document.user_id == current_user.id,
-            Document.file_hash == file_hash
-        )
-        .first()
-    )
-
-    if existing_document:
+    if not file_contents:
         raise HTTPException(
-            status_code=409,
-            detail="This file has already been uploaded"
+            status_code=400,
+            detail="Uploaded file is empty"
         )
+
+    file_hash = hashlib.sha256(file_contents).hexdigest()
 
     upload_directory = Path(
         f"uploads/{current_user.id}"
@@ -114,76 +90,57 @@ def upload_document(
         f"{file_hash}{file_extension}"
     )
 
-    file_path = (
-        upload_directory /
-        stored_filename
-    )
-
-    with open(file_path, "wb") as buffer:
-        buffer.write(file_contents)
+    file_path = upload_directory / stored_filename
 
     try:
-        extracted_text = extract_text(
-            str(file_path),
-            file_extension.replace(".", "")
+        with open(file_path, "wb") as buffer:
+            buffer.write(file_contents)
+
+        result = process_document(
+            db=db,
+            file_path=file_path,
+            user_id=current_user.id
         )
-    except Exception as e:
+
+        if result["status"] == "duplicate":
+            if file_path.exists():
+                file_path.unlink()
+
+            raise HTTPException(
+                status_code=409,
+                detail="This file has already been uploaded"
+            )
+
+        if result["status"] == "no_text":
+            if file_path.exists():
+                file_path.unlink()
+
+            raise HTTPException(
+                status_code=400,
+                detail="No readable text was found in the document"
+            )
+
+        return {
+            "message": "Document uploaded and processed successfully",
+            "document_id": result["document_id"],
+            "user_id": current_user.id,
+            "filename": result["filename"],
+            "file_type": file_extension.replace(".", ""),
+            "file_path": str(file_path),
+            "file_hash": file_hash,
+            "chunks_created": result["chunks_created"]
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        db.rollback()
+
         if file_path.exists():
             file_path.unlink()
 
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to extract document text: {str(e)}"
+            detail=f"Failed to process document: {str(exc)}"
         )
-
-    chunks = chunk_text(
-        extracted_text,
-        chunk_size=1000,
-        overlap=200
-    )
-
-    if not chunks:
-        if file_path.exists():
-            file_path.unlink()
-
-        raise HTTPException(
-            status_code=400,
-            detail="No readable text was found in the document"
-        )
-
-    new_document = Document(
-        user_id=current_user.id,
-        title=Path(original_filename).stem,
-        filename=original_filename,
-        file_type=file_extension.replace(".", ""),
-        file_path=str(file_path),
-        file_hash=file_hash,
-        extracted_text=extracted_text
-    )
-
-    db.add(new_document)
-    db.flush()
-
-    for index, content in enumerate(chunks):
-        document_chunk = DocumentChunk(
-            document_id=new_document.id,
-            chunk_index=index,
-            content=content
-        )
-
-        db.add(document_chunk)
-
-    db.commit()
-    db.refresh(new_document)
-
-    return {
-        "message": "Document uploaded successfully",
-        "document_id": new_document.id,
-        "user_id": new_document.user_id,
-        "filename": new_document.filename,
-        "file_type": new_document.file_type,
-        "file_path": new_document.file_path,
-        "file_hash": new_document.file_hash,
-        "text_length": len(extracted_text),
-        "chunk_count": len(chunks)
-    }

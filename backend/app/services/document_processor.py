@@ -28,6 +28,8 @@ def process_document(
     db: Session,
     file_path: Path,
     user_id: int,
+    original_filename: str = None,
+    original_path: str = None,
 ):
     """
     Process a single document and store it in the database.
@@ -44,6 +46,11 @@ def process_document(
     # Calculate SHA-256
     file_hash = calculate_file_hash(file_path)
 
+    # Use original filename and path if provided, otherwise derive from file_path
+    final_filename = original_filename or file_path.name
+    final_title = Path(final_filename).stem
+    final_path = original_path or str(file_path)
+
     # Check whether this file already exists for this user
     existing_document = (
         db.query(Document)
@@ -56,6 +63,12 @@ def process_document(
 
     # Handle existing document
     if existing_document:
+        # Update filename and path if it previously had a hash name
+        if original_filename and existing_document.filename != original_filename:
+            existing_document.filename = final_filename
+            existing_document.title = final_title
+            existing_document.file_path = final_path
+            db.commit()
 
         existing_chunk_count = (
             db.query(DocumentChunk)
@@ -89,10 +102,10 @@ def process_document(
         # No existing record → create a new document
         document = Document(
             user_id=user_id,
-            title=file_path.stem,
-            filename=file_path.name,
+            title=final_title,
+            filename=final_filename,
             file_type=file_type,
-            file_path=str(file_path),
+            file_path=final_path,
             file_hash=file_hash,
         )
 
@@ -123,12 +136,13 @@ def process_document(
     chunks = chunk_text(extracted_text)
 
     # Update document information
-    document.title = file_path.stem
-    document.filename = file_path.name
+    document.title = final_title
+    document.filename = final_filename
     document.file_type = file_type
-    document.file_path = str(file_path)
+    document.file_path = final_path
     document.file_hash = file_hash
     document.extracted_text = extracted_text
+
 
     # Generate embeddings and store chunks
     for index, content in enumerate(chunks):

@@ -25,8 +25,16 @@ def search_similar_chunks(
     query: str,
     user_id: int,
     top_k: int = 5,
+    document_ids: list = None,
 ):
     query_embedding = generate_embedding(query)
+
+    query_filter = [
+        Document.user_id == user_id,
+        DocumentChunk.embedding.isnot(None)
+    ]
+    if document_ids:
+        query_filter.append(Document.id.in_(document_ids))
 
     chunks = (
         db.query(DocumentChunk, Document)
@@ -34,10 +42,7 @@ def search_similar_chunks(
             Document,
             DocumentChunk.document_id == Document.id
         )
-        .filter(
-            Document.user_id == user_id,
-            DocumentChunk.embedding.isnot(None)
-        )
+        .filter(*query_filter)
         .all()
     )
 
@@ -53,10 +58,12 @@ def search_similar_chunks(
             "chunk_id": chunk.id,
             "document_id": document.id,
             "filename": document.filename,
+            "file_path": document.file_path,
             "chunk_index": chunk.chunk_index,
             "content": chunk.content,
             "similarity": similarity,
         })
+
 
     results.sort(
         key=lambda item: item["similarity"],

@@ -3,9 +3,14 @@ from datetime import datetime, timedelta, timezone
 import jwt
 
 
-SECRET_KEY = "memoraai-development-secret-change-this"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "memoraai-secure-jwt-secret-key-prod-dev")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
 
 def create_access_token(user_id: int, email: str) -> str:

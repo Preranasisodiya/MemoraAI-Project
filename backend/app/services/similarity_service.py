@@ -1,5 +1,5 @@
-import numpy as np
 
+import numpy as np
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
@@ -8,8 +8,8 @@ from app.services.embedding_service import generate_embedding
 
 
 def cosine_similarity(vector_a, vector_b):
-    a = np.array(vector_a, dtype=np.float32)
-    b = np.array(vector_b, dtype=np.float32)
+    a = np.asarray(vector_a, dtype=np.float32)
+    b = np.asarray(vector_b, dtype=np.float32)
 
     norm_a = np.linalg.norm(a)
     norm_b = np.linalg.norm(b)
@@ -31,43 +31,51 @@ def search_similar_chunks(
 
     query_filter = [
         Document.user_id == user_id,
-        DocumentChunk.embedding.isnot(None)
+        DocumentChunk.embedding.isnot(None),
     ]
+
     if document_ids:
         query_filter.append(Document.id.in_(document_ids))
 
-    chunks = (
-        db.query(DocumentChunk, Document)
-        .join(
-            Document,
-            DocumentChunk.document_id == Document.id
-        )
-        .filter(*query_filter)
-        .all()
-    )
-
     results = []
 
-    for chunk, document in chunks:
+    chunks_query = (
+        db.query(
+            DocumentChunk.id.label("chunk_id"),
+            DocumentChunk.document_id.label("document_id"),
+            Document.filename.label("filename"),
+            Document.file_path.label("file_path"),
+            DocumentChunk.chunk_index.label("chunk_index"),
+            DocumentChunk.content.label("content"),
+            DocumentChunk.embedding.label("embedding"),
+        )
+        .join(
+            Document,
+            DocumentChunk.document_id == Document.id,
+        )
+        .filter(*query_filter)
+        .yield_per(25)
+    )
+
+    for chunk in chunks_query:
         similarity = cosine_similarity(
             query_embedding,
-            chunk.embedding
+            chunk.embedding,
         )
 
         results.append({
-            "chunk_id": chunk.id,
-            "document_id": document.id,
-            "filename": document.filename,
-            "file_path": document.file_path,
+            "chunk_id": chunk.chunk_id,
+            "document_id": chunk.document_id,
+            "filename": chunk.filename,
+            "file_path": chunk.file_path,
             "chunk_index": chunk.chunk_index,
             "content": chunk.content,
             "similarity": similarity,
         })
 
-
     results.sort(
         key=lambda item: item["similarity"],
-        reverse=True
+        reverse=True,
     )
 
     return results[:top_k]

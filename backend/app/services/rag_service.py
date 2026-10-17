@@ -1,7 +1,17 @@
+
 from app.services.similarity_service import search_similar_chunks
 
 
-def build_context(db, query: str, user_id: int, top_k: int = 5, document_ids: list = None):
+MIN_SIMILARITY = 0.30
+
+
+def build_context(
+    db,
+    query: str,
+    user_id: int,
+    top_k: int = 5,
+    document_ids: list = None
+):
     results = search_similar_chunks(
         db=db,
         query=query,
@@ -17,15 +27,15 @@ def build_context(db, query: str, user_id: int, top_k: int = 5, document_ids: li
             "sources": []
         }
 
-    # Filter out results with very low similarity if needed, or take the top relevant chunks
-    relevant_results = [r for r in results if r.get("similarity", 0) > 0.15]
-    if not relevant_results and results:
-        # If all are low, keep at least the top one if similarity > 0.05
-        if results[0].get("similarity", 0) > 0.05:
-            relevant_results = results[:2]
+    relevant_results = [
+        result
+        for result in results
+        if result.get("similarity", 0.0) >= MIN_SIMILARITY
+    ]
 
     context_parts = []
-    for index, result in enumerate(relevant_results, start=1):
+
+    for result in relevant_results:
         context_parts.append(
             f"[Document: {result['filename']}]\n"
             f"{result['content']}"
@@ -33,21 +43,22 @@ def build_context(db, query: str, user_id: int, top_k: int = 5, document_ids: li
 
     context = "\n\n".join(context_parts)
 
-    # Return clean, user-safe source references without exposing internal chunks or raw embeddings
     seen_files = set()
     sources = []
+
     for result in relevant_results:
         filename = result.get("filename")
+
         if filename and filename not in seen_files:
             seen_files.add(filename)
             sources.append({
                 "filename": filename,
                 "file_path": result.get("file_path", filename),
                 "document_id": result.get("document_id"),
-                "similarity": round(float(result.get("similarity", 0.0)), 4)
+                "similarity": round(
+                    float(result.get("similarity", 0.0)), 4
+                )
             })
-
-
 
     return {
         "query": query,

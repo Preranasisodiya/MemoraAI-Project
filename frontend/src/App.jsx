@@ -1,8 +1,34 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import "./App.css";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+
+
+function formatMathDelimiters(content) {
+  if (typeof content !== "string") return content;
+
+  let result = content;
+
+  // Convert display math: \[ ... \] to $$ ... $$
+  result = result.replace(
+    /\\\[([\s\S]*?)\\\]/g,
+    (_, expression) => `$$\n${expression.trim()}\n$$`
+  );
+
+  // Convert inline math: \( ... \) to $ ... $
+  result = result.replace(
+    /\\\(([\s\S]*?)\\\)/g,
+    (_, expression) => `$${expression.trim()}$`
+  );
+
+  return result;
+}
+
 
 export default function App() {
   // ----------------------------------------------------
@@ -31,6 +57,15 @@ export default function App() {
   const [asking, setAsking] = useState(false);
   const [chatError, setChatError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+  const textarea = textareaRef.current;
+
+  if (!textarea) return;
+
+  textarea.style.height = "auto";
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+}, [question]);
 
   // ----------------------------------------------------
   // Documents and Upload State
@@ -929,9 +964,16 @@ export default function App() {
                         <span className="assistant-badge">MemoraAI</span>
                       </div>
 
+                      
                       <div className="markdown-body">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                        >
+                          {formatMathDelimiters(msg.content)}
+                        </ReactMarkdown>
                       </div>
+
 
                       {msg.sources && msg.sources.length > 0 && (
                         <div className="sources-footer">
@@ -1006,6 +1048,7 @@ export default function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
             </button>
 
+            
             <textarea
               ref={textareaRef}
               className="chat-textarea"
@@ -1015,11 +1058,19 @@ export default function App() {
                   : "Ask something about your uploaded documents..."
               }
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              onChange={(e) => {
+                setQuestion(e.target.value);
+
+                const textarea = e.target;
+                textarea.style.height = "auto";
+                textarea.style.height =
+                  `${Math.min(textarea.scrollHeight, 200)}px`;
+              }}
               onKeyDown={handleKeyDown}
-              rows={1}
+              rows={3}
               disabled={asking}
             />
+
 
             <button
               type="submit"

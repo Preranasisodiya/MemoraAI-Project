@@ -863,6 +863,7 @@
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12), var(--shadow-md);
 }
 
+
 .chat-textarea {
   flex: 1;
   border: none;
@@ -872,9 +873,13 @@
   line-height: 1.5;
   color: var(--text-primary);
   resize: none;
-  max-height: 140px;
+  min-height: 72px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-sizing: border-box;
   padding: 6px 4px;
 }
+
 
 .send-question-btn {
   width: 36px;
@@ -1362,3 +1367,121 @@
     padding: 12px 14px 16px;
   }
 }
+
+/* ============================================================
+   MARKDOWN TABLES AND MATHEMATICAL EQUATIONS
+   ============================================================ */
+
+/* Improve spacing and readability in AI answers */
+.markdown-body {
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+
+/* Markdown tables */
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13.5px;
+  display: block;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.markdown-body thead {
+  background: var(--bg-hover);
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  min-width: 100px;
+}
+
+.markdown-body th {
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.markdown-body tr:nth-child(even) {
+  background: #F8FAFC;
+}
+
+/* Display mathematical equations */
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 12px 8px;
+  margin: 14px 0;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Inline mathematical expressions */
+.markdown-body .katex {
+  font-size: 1.05em;
+}
+
+/* Keep long equations and code readable on small screens */
+.markdown-body .katex-display > .katex {
+  white-space: nowrap;
+}
+
+.markdown-body pre {
+  max-width: 100%;
+}
+
+/* Mobile-friendly tables and equations */
+@media (max-width: 768px) {
+  .message-card-assistant {
+    padding: 16px;
+  }
+
+  .markdown-body table {
+    font-size: 12.5px;
+  }
+
+  .markdown-body th,
+  .markdown-body td {
+    padding: 8px 10px;
+  }
+
+  .markdown-body .katex-display {
+    font-size: 0.9em;
+  }
+}
+
+
+/* Improve mathematical expressions inside Markdown answers */
+.markdown-body .katex {
+  display: inline-block;
+  white-space: normal;
+  max-width: 100%;
+}
+
+.markdown-body td .katex,
+.markdown-body th .katex {
+  font-size: 0.95em;
+}
+
+.markdown-body table {
+  table-layout: auto;
+}
+
+.markdown-body td {
+  overflow-wrap: anywhere;
+}
+
+.markdown-body .katex-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
